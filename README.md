@@ -21,65 +21,28 @@ After signature validation, other common token claim validations are applied.
 
 # Keycloak
 
-This following starts a local Keycloak instance accessible via: `http://localhost:8081/auth`
+This following starts a local Keycloak instance accessible via: `http://localhost:8081/`
 
-## Prepare Keycloak
+## Run Keycloak via docker compose
 
-### Checkout Keycloak PoC Branch. 
+This starts a server with user "admin" and password "admin" as admin.
+In addition, it automatically imports a realm called "jwedemo" and a client named "jweclient".
+
 ```
-git clone https://github.com/thomasdarimont/keycloak/tree/issue/KEYCLOAK-XXX-Add-Support-for-AccessToken-Encryption
-mvn clean package -DskipTests
-```
-
-### Run Keycloak from branch
-
-Run a local keycloak server from master, e.g.:
-```
-Main-Class: org.keycloak.testsuite.KeycloakServer
-Module: keycloak-testsuite-utils
-JVM-Args:
--Dkeycloak.bind.address=0.0.0.0
--Djava.net.preferIPv4Stack=true
--Dkeycloak.connectionsJpa.url=jdbc:postgresql://localhost:5432/keycloak_4_x_master
--Dkeycloak.connectionsJpa.driver=org.postgresql.Driver
--Dkeycloak.connectionsJpa.driverDialect=org.hibernate.dialect.PostgreSQLDialect
--Dkeycloak.connectionsJpa.user=keycloak
--Dkeycloak.connectionsJpa.password=keycloak
--Dkeycloak.connectionsJpa.showSql=true
--Dkeycloak.connectionsJpa.formatSql=true
--Dprofile=COMMUNITY
--Dproduct.default-profile=COMMUNITY
--Dkeycloak.password.blacklists.path=/home/tom/dev/tmp/blacklists/
--Dcom.sun.net.ssl.checkRevocation=false
--Dkeycloak.truststore.disabled=true
--Dkeycloak.profile=COMMUNITY
--Dkeycloak.product.name=keycloak
--Dproduct.name=keycloak
--Dproduct.version=8.0.x
--Dkeycloak.profile.feature.account2=enabled
--Dkeycloak.profile.feature.scripts=enabled
--Dkeycloak.theme.welcomeTheme=keycloak
--XX:StartFlightRecording
+docker compose up -d
 ```
 
-### Import jwedemo Realm
+As the keycloak process from docker has to contact the host machine, use your local IP address.
+Replace all occurrences of 192.168.178.29 below with your actual IP.
 
-Import the example realm with the admin-console via "Add-Realm", then use the following settings: 
-Import: Select jwedemo-realm.export.json.
-Name: jwedemo
-Enabled: on
+## Add user to jwedemo Realm
 
-Click "Create".
-
-Add a user with username "tester" and password "test". Assign the role "user" for the "jweclient".
+Add a user with username "tester" and password "test". Assign role "user" of the "jweclient" to "tester".
 
 #### Configure Client JWKS URL and Credentials
 The client credentials of the jweclient in the jwedemo realm are already configured.
-In the client credentials tab, select "Signed JWE" as client authenticator and check if the "Use JWKS URL" is "on" and
-that the JWKS URL is `http://localhost:8080/oauth/jwks`, this is the endpoint where Keycloak obtains the 
-RSA public key from the Spring Boot Service to encrypt the token.
-Switch "client authenticator" back to "Client id and secret". This ensures Keycloak requires clientId / secret to obtain tokens
-but also knows where to get client specific keys from... yes I agree, the admin-console UI could be much clearer here...
+In the client "keys" tab make sure that the JWKS URL is `http://192.168.178.29:8080/oauth/jwks`, this is the endpoint where
+Keycloak obtains the RSA public key from the Spring Boot Service to encrypt the token.
 
 # Spring Boot Service
 
@@ -114,7 +77,7 @@ KC_USERNAME=tester
 KC_PASSWORD=test
 KC_CLIENT_ID=jweclient
 KC_CLIENT_SECRET=418d630c-44cb-4f11-9dcc-a0c72dfc9f85
-KC_ISSUER=http://localhost:8081/auth/realms/jwedemo
+KC_ISSUER=http://localhost:8081/realms/jwedemo
 
 KC_RESPONSE=$( \
 curl \
@@ -133,11 +96,37 @@ KC_ACCESS_TOKEN=$(echo $KC_RESPONSE | jq -r .access_token)
 
 ```
 
+Another example uses the Client Credentials Grant - "Service account roles" in Keycloak speech (this is for machine-to-machine communication).
+
+Use the `create-jwt-for-token-request.js` script to create a JWT that then gets uses to obtain the access token (execute `npm|yarn|pnpm start`).
+
+```
+KC_CLIENT_ID=jweclient
+KC_CLIENT_SECRET=418d630c-44cb-4f11-9dcc-a0c72dfc9f85
+KC_ISSUER=http://localhost:8081/realms/jwedemo
+KC_JWT=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Imp3ZWNsaWVudC1lbmMtdjEifQ.eyJleHAiOjE3MDE0NDE1ODQ5MDcsImp0aSI6IjYxOWQ0MGJmLWU1NWYtNGU1MC1hZGQ2LTdkMTg1NzE2NWU2OCIsImlzcyI6Imp3ZWNsaWVudCIsImF1ZCI6Imh0dHA6Ly9sb2NhbGhvc3Q6ODA4MC9yZWFsbXMvandlZGVtbyIsInN1YiI6Imp3ZWNsaWVudCJ9.JiQgt1Lr6HpYgdL6k-OR-y2yBd5vQBYhHncYrjT50fsD7oiHvmigA9rc3LFxLIMleTQv5H3iYAvf6HLE3GmNFhrIlc6AJmC1gEXAiepXUAaLzHBbDXweemfeW1WMuxU8UBaiHhULMVP8wDTle7jvYdUyPv1T4EvX89r-ge0jut2i443ftMZt2cBBr0CwYiJzFZfeI5lUwRwWqPTKuQGXVciXbUumN7iKr7zXhcKfYjKKWkNcOEB0Lps8A4C8m7uLazO6Wmrc_Jb4rO5LoKOJrT4XPT5AkraVrukpDLn1OkXeNwlUL2776B8yjwl1i0TKjHEHPQ2b9am5wmcoldbfDw
+
+KC_RESPONSE=$( \
+curl \
+  -d "client_id=$KC_CLIENT_ID" \
+  -d "client_secret=$KC_CLIENT_SECRET" \
+  -d "grant_type=client_credentials" \
+  -d "client_assertion_type=urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer" \
+  -d "client_assertion=$KC_JWT" \
+  -d "scope=profile openid" \
+  "$KC_ISSUER/protocol/openid-connect/token" \
+)
+echo $KC_RESPONSE | jq -C .
+
+KC_ID_TOKEN=$(echo $KC_RESPONSE | jq -r .id_token)
+KC_ACCESS_TOKEN=$(echo $KC_RESPONSE | jq -r .access_token)
+```
+
 ## Use encrypted Access-Token to access the /api/claims Endpoint
 ```
 curl -v \
      -H "Authorization: Bearer $KC_ACCESS_TOKEN" \
-     http://localhost:8080/api/claims | jq -C .
+     http://192.168.178.29:8080/api/claims | jq -C .
 ```
 
 ### Example Access Token
@@ -164,7 +153,7 @@ This is the JOSE-header of the enclosing JWE. The `kid` refers to the keypair of
 
 The nested signed JWT (JWS) is signed by Keycloak with private key of the active realm key.
 
-The the nested JWS:
+The nested JWS:
 ```
 eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJQRDBwRWd4LUVRT09IYi1iVXZyb3F4dlVhaE5XbFc3dGg2OFEzRVRIT2RrIn0.eyJqdGkiOiJjOTVjZmRkYS1lNTgwLTRmMDYtOGQyOC01NGY3OWFjNDgxOTIiLCJleHAiOjE1ODE3ODU5ODgsIm5iZiI6MCwiaWF0IjoxNTgxNzg1Njg4LCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwODEvYXV0aC9yZWFsbXMvandlZGVtbyIsInN1YiI6IjZjMjZhZmYwLTdiZjgtNDMwNi04NDEzLTBiYzZkZGI0MzZmMCIsInR5cCI6IkJlYXJlciIsImF6cCI6Imp3ZWNsaWVudCIsImF1dGhfdGltZSI6MCwic2Vzc2lvbl9zdGF0ZSI6IjMwZDhhZjlmLTk5ZWUtNDRlNC1hZDQ2LWI2YjhlOGQ2OGQ0MSIsImFjciI6IjEiLCJyZXNvdXJjZV9hY2Nlc3MiOnsiandlY2xpZW50Ijp7InJvbGVzIjpbInVzZXIiXX19LCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJuYW1lIjoiVGhlbyBUZXN0ZXIiLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJ0ZXN0ZXIiLCJnaXZlbl9uYW1lIjoiVGhlbyIsImZhbWlseV9uYW1lIjoiVGVzdGVyIiwiZW1haWwiOiJ0b20rdGVzdGVyQGxvY2FsaG9zdCJ9.Fjdb8vS1PX-t2eyFVPpi_kCbu3jo77Bjs1LrMN_V3ggG7NPOJDTfFYuwgaA8OnUwR5tiSGkLR9_fy00jOhK5tDaV-BpD1MxjebtyJB0eLweg3UDnIUckKJZAiDa_4TKGxU1AuadDvv6ZpTEcAbwXy08jKjXIZw-5fwiZNCQL4YTe37J-xVBE_w37gejihc50QvLHn9fiJTP9V9Ynh9mdJ4y-iTlkucQ4idON3IoVKJzC2lBapUU7C4gi_j2TC-dtobbSWHYnfV6w1adOQhbqwHrCAF6EdK9F9zmsYRgXYJnIZ53xmCT4XW-a_TMTlTQAN_DvJ4vDUYoZzGc5XPEgqA
 ```
@@ -182,7 +171,7 @@ The `kid` references the id of the Keycloak realm key pair with the public key t
 ```
 
 #### Nested JWS ClaimSet decoded
-The the nested JWS ClaimSet:
+The nested JWS ClaimSet:
 ```
 {
   "jti": "c95cfdda-e580-4f06-8d28-54f79ac48192",

@@ -33,7 +33,7 @@ docker compose up -d
 ```
 
 As the keycloak process from docker has to contact the host machine, use your local IP address.
-Replace all occurrences of 192.168.178.29 below with your actual IP.
+Replace all occurrences of 192.168.178.96 below with your actual IP.
 
 ## Add user to jwedemo Realm
 
@@ -41,7 +41,7 @@ Add a user with username "tester" and password "test". Assign role "user" of the
 
 #### Configure Client JWKS URL and Credentials
 The client credentials of the jweclient in the jwedemo realm are already configured.
-In the client "keys" tab make sure that the JWKS URL is `http://192.168.178.29:8080/oauth/jwks`, this is the endpoint where
+In the client "keys" tab make sure that the JWKS URL is `http://192.168.178.96:8080/oauth/jwks`, this is the endpoint where
 Keycloak obtains the RSA public key from the Spring Boot Service to encrypt the token.
 
 # Spring Boot Service
@@ -126,7 +126,7 @@ KC_ACCESS_TOKEN=$(echo $KC_RESPONSE | jq -r .access_token)
 ```
 curl -v \
      -H "Authorization: Bearer $KC_ACCESS_TOKEN" \
-     http://192.168.178.29:8080/api/claims | jq -C .
+     http://192.168.178.96:8080/api/claims | jq -C .
 ```
 
 ### Example Access Token

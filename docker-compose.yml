@@ -9,5 +9,5 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
     volumes:
-      - .:/opt/keycloak/data/import
+      - ./jwedemo-realm-export.json:/opt/keycloak/data/import/jwedemo-realm-export.json
     command: start-dev --import-realm

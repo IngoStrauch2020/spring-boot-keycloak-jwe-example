@@ -1,8 +1,9 @@
 package demo.config;
 
-import com.nimbusds.jose.Algorithm;
+import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
+import java.security.KeyStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,8 +11,6 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.method.configuration.GlobalMethodSecurityConfiguration;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
 import org.springframework.security.core.authority.mapping.SimpleAuthorityMapper;
-
-import java.security.KeyStore;
 
 @Configuration
 @EnableGlobalMethodSecurity(prePostEnabled = true, securedEnabled = true, proxyTargetClass = true)
@@ -55,8 +54,8 @@ class SecurityConfig extends GlobalMethodSecurityConfiguration {
 
         RSAKey encryptionKey = new RSAKey.Builder(key)
                 .keyID(encKeyId)
-                .keyUse(KeyUse.ENCRYPTION)
-                .algorithm(new Algorithm("RSA-OAEP"))
+                .keyUse(KeyUse.SIGNATURE)
+                .algorithm(JWSAlgorithm.RS256)
                 .build();
 
         return encryptionKey;

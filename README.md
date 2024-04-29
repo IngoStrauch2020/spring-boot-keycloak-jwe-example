@@ -62,7 +62,8 @@ keytool -genkey \
         -storepass geheim \
         -dname "CN=Thomas Darimont, OU=R&D, O=tdlabs, L=Saarbrücken, ST=SL, C=DE"  \
         -keyalg RSA \
-        -keysize 2048
+        -keysize 2048 \
+        -validity 9999
 ```
 
 ### Running the Spring Boot App

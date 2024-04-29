@@ -30,7 +30,7 @@ const payload = {
   "exp": Date.now() + 3600 * 1000,
   "jti": uuidv4(),
   "iss": client_id,
-  "aud": "http://localhost:8080/realms/jwedemo",
+  "aud": "http://localhost:8081/realms/jwedemo",
   "sub": client_id
 }
 

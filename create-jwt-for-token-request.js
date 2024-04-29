@@ -37,15 +37,15 @@ const payload = {
 const playload_string = JSON.stringify(payload)
 console.log("Payload", playload_string)
 
-const header_base64 = Buffer.from(header_string).toString("base64url").replaceAll("=", "")
+const header_base64 = Buffer.from(header_string).toString("base64url")
 console.log("Header (base64)", header_base64)
 
-const payload_base64 = Buffer.from(playload_string).toString("base64url").replaceAll("=", "")
+const payload_base64 = Buffer.from(playload_string).toString("base64url")
 console.log("Payload (base64)", payload_base64)
 
 const sign = crypto.createSign('RSA-SHA256')
 sign.update(header_base64 + "." + payload_base64)
-const sig_base64 = sign.sign(key, 'base64url').replaceAll("=", "")
+const sig_base64 = sign.sign(key, 'base64url')
 
 console.log("Signature (base64)", sig_base64)
 

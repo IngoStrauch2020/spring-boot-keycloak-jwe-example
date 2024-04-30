@@ -32,16 +32,13 @@ In addition, it automatically imports a realm called "jwedemo" and a client name
 docker compose up -d
 ```
 
-As the keycloak process from docker has to contact the host machine, use your local IP address.
-Replace all occurrences of 192.168.178.96 below with your actual IP.
-
 ## Add user to jwedemo Realm
 
 Add a user with username "tester" and password "test". Assign role "user" of the "jweclient" to "tester".
 
 #### Configure Client JWKS URL and Credentials
 The client credentials of the jweclient in the jwedemo realm are already configured.
-In the client "keys" tab make sure that the JWKS URL is `http://192.168.178.96:8080/oauth/jwks`, this is the endpoint where
+In the client "keys" tab make sure that the JWKS URL is `http://localhost:8080/oauth/jwks`, this is the endpoint where
 Keycloak obtains the RSA public key from the Spring Boot Service to encrypt the token.
 
 # Spring Boot Service
@@ -77,13 +74,11 @@ For demo purposes we obtain tokens via Resource Owner Password Credentials (ROPC
 KC_USERNAME=tester
 KC_PASSWORD=test
 KC_CLIENT_ID=jweclient
-KC_CLIENT_SECRET=418d630c-44cb-4f11-9dcc-a0c72dfc9f85
 KC_ISSUER=http://localhost:8081/realms/jwedemo
 
 KC_RESPONSE=$( \
 curl \
   -d "client_id=$KC_CLIENT_ID" \
-  -d "client_secret=$KC_CLIENT_SECRET" \
   -d "username=$KC_USERNAME" \
   -d "password=$KC_PASSWORD" \
   -d "grant_type=password" \
@@ -103,14 +98,12 @@ Use the `create-jwt-for-token-request.js` script to create a JWT that then gets 
 
 ```
 KC_CLIENT_ID=jweclient
-KC_CLIENT_SECRET=418d630c-44cb-4f11-9dcc-a0c72dfc9f85
 KC_ISSUER=http://localhost:8081/realms/jwedemo
 KC_JWT=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Imp3ZWNsaWVudC1lbmMtdjEifQ.eyJleHAiOjE3MDE0NDE1ODQ5MDcsImp0aSI6IjYxOWQ0MGJmLWU1NWYtNGU1MC1hZGQ2LTdkMTg1NzE2NWU2OCIsImlzcyI6Imp3ZWNsaWVudCIsImF1ZCI6Imh0dHA6Ly9sb2NhbGhvc3Q6ODA4MC9yZWFsbXMvandlZGVtbyIsInN1YiI6Imp3ZWNsaWVudCJ9.JiQgt1Lr6HpYgdL6k-OR-y2yBd5vQBYhHncYrjT50fsD7oiHvmigA9rc3LFxLIMleTQv5H3iYAvf6HLE3GmNFhrIlc6AJmC1gEXAiepXUAaLzHBbDXweemfeW1WMuxU8UBaiHhULMVP8wDTle7jvYdUyPv1T4EvX89r-ge0jut2i443ftMZt2cBBr0CwYiJzFZfeI5lUwRwWqPTKuQGXVciXbUumN7iKr7zXhcKfYjKKWkNcOEB0Lps8A4C8m7uLazO6Wmrc_Jb4rO5LoKOJrT4XPT5AkraVrukpDLn1OkXeNwlUL2776B8yjwl1i0TKjHEHPQ2b9am5wmcoldbfDw
 
 KC_RESPONSE=$( \
 curl \
   -d "client_id=$KC_CLIENT_ID" \
-  -d "client_secret=$KC_CLIENT_SECRET" \
   -d "grant_type=client_credentials" \
   -d "client_assertion_type=urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer" \
   -d "client_assertion=$KC_JWT" \
@@ -127,7 +120,7 @@ KC_ACCESS_TOKEN=$(echo $KC_RESPONSE | jq -r .access_token)
 ```
 curl -v \
      -H "Authorization: Bearer $KC_ACCESS_TOKEN" \
-     http://192.168.178.96:8080/api/claims | jq -C .
+     http://localhost:8080/api/claims | jq -C .
 ```
 
 ### Example Access Token

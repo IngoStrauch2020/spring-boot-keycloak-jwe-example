@@ -1,27 +1,15 @@
-PoC: Spring Boot Keycloak Signed & Encrypted JWT Example
+PoC: client_credentials flow using client-jwt with JWKS URL between Keycloak and Spring Boot application 
 ----
-This is a simple PoC for handling signed and encrypted JWTs with Spring Boot / Spring Security Oauth2 Resource Server.
-
-Why this example? Keycloak supports signed and encrypted ID-Tokens for a while since this PR was merged (https://github.com/keycloak/keycloak/pull/5779),
-however signed and encrypted access-tokens support is currently not available in Keycloak but an often requested feature. 
-
-This PoC uses a [slightly patched version of Keycloak](https://github.com/thomasdarimont/keycloak/tree/issue/KEYCLOAK-XXX-Add-Support-for-AccessToken-Encryption) with support for signed and encrypted access-tokens in combination
-with a small Spring Boot app that demonstrates how to handle signed and encrypted access-tokens.
-
-This service generates a asymmetric RSA keypair to support encrypted access tokens.
-The public part of the RSA-OAEP encryption Key is exposed via the `/oauth/jwks` endpoint of this service.
-In our example Keycloak will fetch this public key to encrypt the access- and id-token sent to the consumer.
-
-To decrypt the JWE access-token within the service, the private RSA key of this service is used. 
-The decryption yields a nested signed JWT (JWS) which is the actual access-token with the claims, scope and role information for the user. 
-The nested access-token needs to be verified by checking the signature with the Public-key which is associated with the asymmetric key pair
-in the Keycloak realm whose private key was used to sign the nested access-token. The appropriate Key is identified by the "kid" header value
-of the nested access-token JWS header and obtained via the configured: `spring.security.oauth2.resourceserver.jwt.jwk-set-uri`.
-After signature validation, other common token claim validations are applied.   
+This is a simple PoC to illustrate the client_credentials flow using a "jwt-bearer" client_assertion_type
+instead of a client_secret.
+The keycloak client in this example uses a JWKS URL pointing to a Spring Boot application
+that exposes the public key in JSON Web Key Set format.
+The app then uses the private key to create a JWT that is sent as client_assertion to the
+Keycloak token endpoint.
 
 # Keycloak
 
-This following starts a local Keycloak instance accessible via: `http://localhost:8081/`
+This following starts a local Keycloak instance accessible via http://localhost:8081/
 
 ## Run Keycloak via docker compose
 
@@ -32,26 +20,40 @@ In addition, it automatically imports a realm called "jwedemo" and a client name
 docker compose up -d
 ```
 
+The client credentials of the "jweclient" in the "jwedemo" realm are already configured.
+In the client "keys" tab you can see that the JWKS URL is http://localhost:8080/oauth/jwks, this is the endpoint where
+Keycloak obtains the RSA public key from the Spring Boot service to verify the client_assertion JWZ
+during the token request.
+And in the "credentials" tab you can see that the "Client Authenticator" is set to "Signed JWT"
+instead of "Client ID and Secret".
+
+The keycloak docker container is started with a couple of log levels set to DEBUG or TRACE
+in order to see what's going on behind the scenes like this:
+
+```
+docker logs -f keycloak_with_jwks_example
+```
+
 ## Add user to jwedemo Realm
 
 Add a user with username "tester" and password "test". Assign role "user" of the "jweclient" to "tester".
 
-#### Configure Client JWKS URL and Credentials
-The client credentials of the jweclient in the jwedemo realm are already configured.
-In the client "keys" tab make sure that the JWKS URL is `http://localhost:8080/oauth/jwks`, this is the endpoint where
-Keycloak obtains the RSA public key from the Spring Boot Service to encrypt the token.
-
 # Spring Boot Service
 
 The following starts a Spring Boot Service available on http://localhost:8080 which exposes
-two endpoints:
-- /oauth/jwks - exposes the public RSA key used for token encryption by Keycloak
-- /api/claims - exposes a protected endpoint that can be accessed with a signed and encrypted access-token and returns the contained claims 
+several endpoints:
+- /oauth/jwks - exposes the public RSA key used for client_assertion validation by keycloak
+- /oauth/client_assertion - generates a JWT that can be used as client_assertion
+- /oauth/token - requests an access token from keycloak using the client_credentials flow and returns the full response from keycloak
+- /api/claims - exposes a protected endpoint that can be accessed with an access token and returns the contained claims
+- /api/hello - similar to /api/claims but returns a greeting using the username or subject from the access token
+- /api/hello - similar to /api/claims but returns the email from the access token
 
 ## Prepare Spring Boot Service
 
 ### Generate Keystore
-Execute the following in the current project root:
+A public/private key pair is part of this repository.
+It was created like this:
 ```
 keytool -genkey \
         -alias jweclient-enc-v1 \
@@ -69,12 +71,16 @@ Just run the App class with the main method.
 # Demo
 
 ## Retrieve Tokens
-For demo purposes we obtain tokens via Resource Owner Password Credentials (ROPC) Grant - "Direct Access Grants" in Keycloak speech.
+For demo purposes we obtain access tokens via Resource Owner Password Credentials (ROPC) Grant - "Direct Access Grants" in Keycloak speech.
+
+Call http://localhost:8080/oauth/client_assertion and use the response as value for `KC_JWT` in the snippet below.
+
 ```
 KC_USERNAME=tester
 KC_PASSWORD=test
 KC_CLIENT_ID=jweclient
 KC_ISSUER=http://localhost:8081/realms/jwedemo
+KC_JWT=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Imp3ZWNsaWVudC1lbmMtdjEifQ.eyJleHAiOjE3MDE0NDE1ODQ5MDcsImp0aSI6IjYxOWQ0MGJmLWU1NWYtNGU1MC1hZGQ2LTdkMTg1NzE2NWU2OCIsImlzcyI6Imp3ZWNsaWVudCIsImF1ZCI6Imh0dHA6Ly9sb2NhbGhvc3Q6ODA4MC9yZWFsbXMvandlZGVtbyIsInN1YiI6Imp3ZWNsaWVudCJ9.JiQgt1Lr6HpYgdL6k-OR-y2yBd5vQBYhHncYrjT50fsD7oiHvmigA9rc3LFxLIMleTQv5H3iYAvf6HLE3GmNFhrIlc6AJmC1gEXAiepXUAaLzHBbDXweemfeW1WMuxU8UBaiHhULMVP8wDTle7jvYdUyPv1T4EvX89r-ge0jut2i443ftMZt2cBBr0CwYiJzFZfeI5lUwRwWqPTKuQGXVciXbUumN7iKr7zXhcKfYjKKWkNcOEB0Lps8A4C8m7uLazO6Wmrc_Jb4rO5LoKOJrT4XPT5AkraVrukpDLn1OkXeNwlUL2776B8yjwl1i0TKjHEHPQ2b9am5wmcoldbfDw
 
 KC_RESPONSE=$( \
 curl \
@@ -82,6 +88,8 @@ curl \
   -d "username=$KC_USERNAME" \
   -d "password=$KC_PASSWORD" \
   -d "grant_type=password" \
+  -d "client_assertion_type=urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer" \
+  -d "client_assertion=$KC_JWT" \
   -d "scope=profile openid" \
   "$KC_ISSUER/protocol/openid-connect/token" \
 )
@@ -93,8 +101,6 @@ KC_ACCESS_TOKEN=$(echo $KC_RESPONSE | jq -r .access_token)
 ```
 
 Another example uses the Client Credentials Grant - "Service account roles" in Keycloak speech (this is for machine-to-machine communication).
-
-Use the `create-jwt-for-token-request.js` script to create a JWT that then gets uses to obtain the access token (execute `npm|yarn|pnpm start`).
 
 ```
 KC_CLIENT_ID=jweclient
@@ -123,106 +129,22 @@ curl -v \
      http://localhost:8080/api/claims | jq -C .
 ```
 
-### Example Access Token
-The example access token is an JWE (JSON Web Encryption) Token which contains a signed JWS (JSON Web Signature) token as encrypted payload.
+# More information
+
+## client_assertion in detail
+
+This repo contains a script that 
+- reads the keystore
+- prints the public and private key in PEM format
+- prints the header and payload of the client_assertion in JSON and Base64 encoded
+- prints the Base64 encoded signature
+- and finally prints the JWT (like the /oauth/client_assertion endpoint)
+
+Run it like this:
 ```
-eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkExMjhHQ00iLCJjdHkiOiJKV1QiLCJraWQiOiJqd2VjbGllbnQtZW5jLXYxIn0.qFSNh2CWuIK2dCKdsS22VpI6L1jwp5GP1_KIn8c3yxatLc5RejhalBgsF7UhRXuFaFjn6oubfkyzxvVRwK00hTj_IXK7M2wMBNmlDUOzRFxuAQ0wvr3S117rFPvImCSmC4PhcoEfSXS46mpDxqymb1MVqRoG0oNSSb_OeJS_MsQRnU8HlzjuZcHrA5TJg7kwsL2jJT8aHq9PXjMJJgWIhkU73gT52G1rvnuhsA4FQ3EuUk2wEs470W870orVybhA292p5wpXW9_gD2sq3hyM2YZmD2EtBeefOjs2EvkxQwmGozjGWUmRhGlHNQ-O_LOit2ikIJL71ZJmgG-4RTFBcw.6TzCP4tNhnVa9rpL.XlyC-JuYEzs9g5mgtn6FFlq9k4GtUOOMWtZfq4NixL19zTq_RlbI2Nh2amKn4YhTlHrCz6fAwEU2IIOj5l1HrYTMloiImVJmXZeBuiP_g6WRou5Uh7MjzuraIWVCXNsV6F5Cx5jTxHG-BYPA3Glr5kJ8uQi8KPPSs92YZLPwMhIpuyJGxrOA-l_t4Es2wYz2gfEZC4l4bQGXrPmQ8K5Bil7W94XzvEd93JxQUxUMZLmbmVgv5CUqnAWaNdldu2d-h5h8LRCRl2jnUQKw76z7OlVJDwF1HZxIAQjfBau_aV6UHK4-FbLUWHTGDF1kOwjK28VWL9vnrHbxxPRGuC81rONKZTFk_tDmURUcDcpy8IR3vje61D5GVVxZSwKdEl2x6DXrAoLdV_LZu34JsjLEi5Tkl8BiCdrjRXEG2LIVN952G347Yex1VcKaU4on2UokWPRWy2__1HjKI36AT0JRBVrT7hjyGtc9THvovAf5_PeLpio5QKyJJbycyNI5-Y5IpvrHm36JezbL7FwmN3gIjYYf4dhhXI1Q2RHbeMaqp1aHWmXDsoSxyRZe8GUrH3acEGkC66EJdw9qRCVtcsRE7SqDVm-xqMMWW2yN0hIDbYlvHvHXDdODgsri9dCI0mPsOh8ngyBQZHpCVI8bfDJkJE_wi-f7vfmPegL8NZFfu2lPRACkLIR7tqxkn2T4Lt95YoidOmQfwr3DQR-fvLnh2S29BGmTygVuizGA595vFKL3UTPgKNP5K5zozZrDEX9P1wB9PIdLevIXyptmTpJYY9g9QNafkPevaB4ThVXVgE1IUEjyZy4kJRiAyo1KzyGvXSdx5z7qYXpqNbJ5-uQ24QB-hRb6x5K_3xJrw-VnJ8opzWeALYbJlRDpAhvSOOzMef5dWHu7myHAZaubLY3T-INn86ievciY_msMQZSUtCbdIgQsFWOyCia0LBceNLcmikeph7d8nkELpWlC5KgdBy163AnJoQCT85ytSInvTM4bhEigA_Xeenk-KhS9lmBrQdAZZF5D7pzjZYKrO2438X6YbKwWXStZiGf0WRF7Uqn3lGTcrf3tCuA-vVWrQ7tu2W7nDWI2cRySqw1UYR_JHQ6eBfu2QEa1DkyzbnwLy3dHcGI75KlBq7uc3YnCTkI3_Fz3e74tUdjETSGHfS5szjvdCBBb-9k3Nos97E6nahWvy7z1WOhASmuvDR0iUrV7WJeIQUlisi-3-1kZT6UkUFMJrzaOv72MJhaCerVJc4hkQfcUqRPUsso3Z67cij67BQs0Iu-mIoQwChLkl4Hoy3KYC8jFeJf6M37N5zbvGXXK_DFwb70g9ZAoom1J9-6BinszjZ5cYv18MbNC8hVqvBKl29yGSI5RS7Qma_NJlX-m4MmEUAua4MTWYk1Rpaj8N3IVHBYKWnUQHkJFKUfOaQXlP3QywRc56g364v0PYHe0DF9Qab8WAvYlyQtWPXFrHRZJtvRBqSUBvlLilL96C2O5c7x2o9oXfziM2isvmxqhhE2KbaxJt43mTfD8Povb2YLz.3flZQa7bMj9RYQzveQCFaQ
+npm|yarn|pnpm install
+npm|yarn|pnpm start
 ```
 
-#### JWE Header
-The outer JWE uses asymmetric encryption and contains a signed JWT (JWS) as encrypted payload, denoted by the `cty: JWT` header entry.
-    
-
-This is the JOSE-header of the enclosing JWE. The `kid` refers to the keypair of the Spring Boot Service that was used to encrypt the JWE token.
-```
-{
-  "alg": "RSA-OAEP",
-  "enc": "A128GCM",
-  "cty": "JWT",
-  "kid": "jweclient-enc-v1"
-}
-```
-
-#### Nested JWS
-
-The nested signed JWT (JWS) is signed by Keycloak with private key of the active realm key.
-
-The nested JWS:
-```
-eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJQRDBwRWd4LUVRT09IYi1iVXZyb3F4dlVhaE5XbFc3dGg2OFEzRVRIT2RrIn0.eyJqdGkiOiJjOTVjZmRkYS1lNTgwLTRmMDYtOGQyOC01NGY3OWFjNDgxOTIiLCJleHAiOjE1ODE3ODU5ODgsIm5iZiI6MCwiaWF0IjoxNTgxNzg1Njg4LCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwODEvYXV0aC9yZWFsbXMvandlZGVtbyIsInN1YiI6IjZjMjZhZmYwLTdiZjgtNDMwNi04NDEzLTBiYzZkZGI0MzZmMCIsInR5cCI6IkJlYXJlciIsImF6cCI6Imp3ZWNsaWVudCIsImF1dGhfdGltZSI6MCwic2Vzc2lvbl9zdGF0ZSI6IjMwZDhhZjlmLTk5ZWUtNDRlNC1hZDQ2LWI2YjhlOGQ2OGQ0MSIsImFjciI6IjEiLCJyZXNvdXJjZV9hY2Nlc3MiOnsiandlY2xpZW50Ijp7InJvbGVzIjpbInVzZXIiXX19LCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJuYW1lIjoiVGhlbyBUZXN0ZXIiLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJ0ZXN0ZXIiLCJnaXZlbl9uYW1lIjoiVGhlbyIsImZhbWlseV9uYW1lIjoiVGVzdGVyIiwiZW1haWwiOiJ0b20rdGVzdGVyQGxvY2FsaG9zdCJ9.Fjdb8vS1PX-t2eyFVPpi_kCbu3jo77Bjs1LrMN_V3ggG7NPOJDTfFYuwgaA8OnUwR5tiSGkLR9_fy00jOhK5tDaV-BpD1MxjebtyJB0eLweg3UDnIUckKJZAiDa_4TKGxU1AuadDvv6ZpTEcAbwXy08jKjXIZw-5fwiZNCQL4YTe37J-xVBE_w37gejihc50QvLHn9fiJTP9V9Ynh9mdJ4y-iTlkucQ4idON3IoVKJzC2lBapUU7C4gi_j2TC-dtobbSWHYnfV6w1adOQhbqwHrCAF6EdK9F9zmsYRgXYJnIZ53xmCT4XW-a_TMTlTQAN_DvJ4vDUYoZzGc5XPEgqA
-```
-
-#### Nested JWS header decoded
-
-This is the JOSE-Header of the nested JWS.   
-The `kid` references the id of the Keycloak realm key pair with the public key to verify the signature of the JWS token. 
-```
-{
-  "alg": "RS256",
-  "typ": "JWT",
-  "kid": "PD0pEgx-EQOOHb-bUvroqxvUahNWlW7th68Q3ETHOdk"
-}
-```
-
-#### Nested JWS ClaimSet decoded
-The nested JWS ClaimSet:
-```
-{
-  "jti": "c95cfdda-e580-4f06-8d28-54f79ac48192",
-  "exp": 1581785988,
-  "nbf": 0,
-  "iat": 1581785688,
-  "iss": "http://localhost:8081/auth/realms/jwedemo",
-  "sub": "6c26aff0-7bf8-4306-8413-0bc6ddb436f0",
-  "typ": "Bearer",
-  "azp": "jweclient",
-  "auth_time": 0,
-  "session_state": "30d8af9f-99ee-44e4-ad46-b6b8e8d68d41",
-  "acr": "1",
-  "resource_access": {
-    "jweclient": {
-      "roles": [
-        "user"
-      ]
-    }
-  },
-  "scope": "openid profile email",
-  "email_verified": false,
-  "name": "Theo Tester",
-  "preferred_username": "tester",
-  "given_name": "Theo",
-  "family_name": "Tester",
-  "email": "tom+tester@localhost"
-}
-```
-
-### Example Response
-```
-{
-  "sub": "6c26aff0-7bf8-4306-8413-0bc6ddb436f0",
-  "resource_access": {
-    "jweclient": {
-      "roles": [
-        "user"
-      ]
-    }
-  },
-  "email_verified": false,
-  "iss": "http://localhost:8081/auth/realms/jwedemo",
-  "typ": "Bearer",
-  "preferred_username": "tester",
-  "given_name": "Theo",
-  "acr": "1",
-  "nbf": "1970-01-01T00:00:00Z",
-  "azp": "jweclient",
-  "auth_time": 0,
-  "scope": "openid profile email",
-  "name": "Theo Tester",
-  "exp": "2020-02-15T16:50:39Z",
-  "session_state": "d23aab28-3344-45bb-827f-24f76ba587f3",
-  "iat": "2020-02-15T16:45:39Z",
-  "family_name": "Tester",
-  "jti": "a33f5623-533e-487f-9c3c-31d8a20d958c",
-  "email": "tom+tester@localhost"
-}
-```
+It's not strictly necessary to use for the demo, just for illustration purposes if you
+want to have a more low-level overview.

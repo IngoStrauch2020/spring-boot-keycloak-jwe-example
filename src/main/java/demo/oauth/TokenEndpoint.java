@@ -39,9 +39,6 @@ class TokenEndpoint {
   @Value("${keycloak.clientId}")
   String clientId;
 
-  @Value("${keycloak.clientSecret}")
-  String clientSecret;
-
   @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
   String issuerUri;
 
@@ -76,7 +73,6 @@ class TokenEndpoint {
 
     MultiValueMap<String, String> formData= new LinkedMultiValueMap<>();
     formData.add("client_id", clientId);
-    formData.add("client_secret", clientSecret);
     formData.add("grant_type","client_credentials");
     formData.add("client_assertion_type","urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer");
     formData.add("client_assertion", clientAssertion.serialize());

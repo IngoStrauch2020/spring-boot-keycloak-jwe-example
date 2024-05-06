@@ -14,6 +14,11 @@ class JwksEndpoint {
 
     private final RSAKey jweEncKey;
 
+    /**
+     * Provides the public key to be used by Keycloak to verify the client_assertion of a token request using the jweclient
+     *
+     * @return Array with public key information in JSON Web Key Set format
+     */
     @GetMapping("/oauth/jwks")
     Object getJwks() {
         log.info("Returning jwks: " + jweEncKey.getKeyID());

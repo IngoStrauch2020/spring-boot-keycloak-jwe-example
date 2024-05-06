@@ -74,7 +74,7 @@ class TokenEndpoint {
     MultiValueMap<String, String> formData= new LinkedMultiValueMap<>();
     formData.add("client_id", clientId);
     formData.add("grant_type","client_credentials");
-    formData.add("client_assertion_type","urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer");
+    formData.add("client_assertion_type","urn:ietf:params:oauth:client-assertion-type:jwt-bearer");
     formData.add("client_assertion", clientAssertion.serialize());
     formData.add("scope","profile openid");
 

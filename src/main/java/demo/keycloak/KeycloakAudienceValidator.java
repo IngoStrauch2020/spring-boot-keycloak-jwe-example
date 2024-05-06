@@ -13,12 +13,12 @@ class KeycloakAudienceValidator implements OAuth2TokenValidator<Jwt> {
     private final OAuth2Error ERROR_INVALID_AUDIENCE = new OAuth2Error("invalid_token", "Invalid audience", null);
 
     @Value("${keycloak.clientId}")
-    String allowedAudience;
+    String clientId;
 
     @Override
     public OAuth2TokenValidatorResult validate(Jwt jwt) {
 
-        if (!(jwt.getAudience() != null && jwt.getAudience().contains(allowedAudience)) && !allowedAudience.equals(jwt.getClaimAsString("azp"))) {
+        if (!(jwt.getAudience() != null && jwt.getAudience().contains("account")) && !clientId.equals(jwt.getClaimAsString("azp"))) {
             return OAuth2TokenValidatorResult.failure(ERROR_INVALID_AUDIENCE);
         }
 
